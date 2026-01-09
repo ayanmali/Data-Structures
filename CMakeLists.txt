@@ -16,7 +16,7 @@ if(APPLE)
 endif()
 
 # Add executable
-add_executable(arena-allocator arena-allocator/main.cpp)
+add_executable(arena-allocator arena-allocator/arena_alloc.cpp)
 
 
 # Optional: Set output directory
