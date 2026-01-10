@@ -38,7 +38,7 @@ auto make_unique_arena(ArenaAllocator& allocator, Args&&... args) {
     new (ptr) T(std::forward<Args>(args)...);
 
     return std::unique_ptr<T, decltype(deleter)>(static_cast<T*>(ptr), deleter);
-};
+}
 
 
 template <typename T, typename... Args>
