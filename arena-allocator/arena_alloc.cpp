@@ -4,7 +4,6 @@
 #include <memory>
 #include <vector>
 
-// TODO: add custom deleters to return memory back to the arena after destruction
 struct ArenaAllocator {
     std::vector<char> data;
     std::size_t current_offset;

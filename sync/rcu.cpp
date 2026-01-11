@@ -6,6 +6,8 @@ Userspace RCU
 #include <thread>
 
 template <typename T>
+
+// TODO: test cache alignment
 struct RCU {
     private:
         // pointer to the data
@@ -46,7 +48,6 @@ struct RCU {
             return ReadGuard(this);
         }
 
-        // New data to overwrite the struct with, and a memory address where the new data is to be stored
         void write(T* new_data) {
             // atomically swap the pointer
             T* old_data = data.exchange(new_data, std::memory_order_acq_rel);

@@ -6,6 +6,7 @@ Designed to be wait-free for writers and lock-free for readers.
 #include <atomic>
 
 template <typename T>
+// TODO: test cache alignment
 struct Seqlock {
     std::atomic_uint32_t seq;
     std::atomic<T> data;
@@ -25,7 +26,8 @@ struct Seqlock {
     };
 
 
-    void write(T new_data) {
+    // pass by value
+    void write(const T new_data) {
         uint32_t seq1 = seq.load();
         // spin while a write is in progress
         while (seq1 & 1 || !seq.compare_exchange_weak(seq1, seq1+1)) {};
@@ -33,4 +35,15 @@ struct Seqlock {
         data = new_data;
         seq = seq1 + 2;
     };
+
+    // TODO: test to see if this works
+    // Passing by reference for larger data types
+    void write(const T& new_data) {
+        uint32_t seq1 = seq.load();
+        // spin while a write is in progress
+        while (seq1 & 1 || !seq.compare_exchange_weak(seq1, seq1+1)) {};
+        // "critical section"
+        data = new_data;
+        seq = seq1 + 2;  
+    }
 };

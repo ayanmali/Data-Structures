@@ -1,8 +1,7 @@
 /*
-Multi-consumer queue on which each element is popped from the queue and read by only one of the consumers.
-Follows the load balancer pattern.
+Unicast single-producer multi-consumer queue.
 */
 
-struct SPMCLBQueue {
+struct SPMCUnicast {
 
 };
