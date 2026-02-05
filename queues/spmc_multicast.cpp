@@ -1,9 +1,8 @@
+#include "ring_buffer_utils.hpp"
 #include <atomic>
 #include <span>
 #include <cstddef>
 #include <sys/types.h>
-
-constexpr size_t CACHE_LINE_SIZE = 64;
 
 /*
 Contains a read and write counter. Consumers only read the counters.
@@ -15,37 +14,46 @@ at any given point in time, [ReadCounter, WriteCounter] is the range of data tha
 is being written, and [WriteCounter, ReadCounter] is the range of data that can
 be read.
 */
-template <typename T>
+template <size_t N>
 struct SPMCMulticast {
-        uint8_t buffer[0];
-        std::atomic_uint64_t read_ctr;
-        std::atomic_uint64_t write_ctr;
-        SPMCMulticast() : read_ctr(0), write_ctr(0) {}
-    
-};
+    alignas(CACHE_LINE_SIZE) std::atomic_uint64_t read_idx{0};
+    alignas(CACHE_LINE_SIZE) std::atomic_uint64_t write_idx{0};
+    alignas(CACHE_LINE_SIZE) uint64_t write_local_ctr{0};
+    uint8_t buffer[N]; // buffer of bytes
 
-template <typename T>
-struct MCProducer {
-    SPMCMulticast<T>* queue;
-    uint64_t local_ctr;
+    bool Push(std::span<std::byte> data) {
+        size_t payload_size = data.size();
+        size_t total_size = payload_size + HEADER_SIZE;
+        if (total_size > N) return false;
 
-    void Write(std::span<std::byte> buffer) {
-        size_t payload_size = buffer.size();
-        local_ctr += payload_size;
+        write_local_ctr += total_size;
+
+        size_t write = write_idx.load();
+        size_t read = read_idx.load();
+
+        if (write - read + total_size > N) return false;  // not enough capacity
+        size_t offset = write % N;
+
         // move write counter up
-        queue->write_ctr.store(local_ctr);
+        write_idx.store(write_local_ctr);
 
-        // copy
+        // copy data into buffer
+        CopyIn(&buffer, offset, payload_size, HEADER_SIZE);
+        CopyIn(&buffer, offset + HEADER_SIZE, data.data(), payload_size);
 
         // move read counter up
-        queue->read_ctr.store(local_ctr);
+        read_idx.store(write_local_ctr);
+        return true;
+    }
+
+    std::optional<std::vector<std::byte>> Pop() {
 
     }
 };
 
-template <typename T>
+template <size_t N>
 struct MCConsumer {
-    SPMCMulticast<T>* queue;
+    SPMCMulticast<N>* queue;
     uint64_t local_ctr;
 
     T value;
