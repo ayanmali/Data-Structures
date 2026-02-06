@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/Users/ayali/Desktop/Development/Data-Structures",
+  "command": "/usr/bin/c++    -stdlib=libc++ -std=gnu++20 -arch arm64 -o CMakeFiles/arena-allocator.dir/arena-allocator/arena_alloc.cpp.o -c /Users/ayali/Desktop/Development/Data-Structures/arena-allocator/arena_alloc.cpp",
+  "file": "/Users/ayali/Desktop/Development/Data-Structures/arena-allocator/arena_alloc.cpp",
+  "output": "CMakeFiles/arena-allocator.dir/arena-allocator/arena_alloc.cpp.o"
+}
+]
