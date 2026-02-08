@@ -26,7 +26,7 @@ template <size_t N>
 struct SPSCVarSize {
     alignas(CACHE_LINE_SIZE) std::atomic_size_t read_idx{0};   // owned by consumer
     alignas(CACHE_LINE_SIZE) std::atomic_size_t write_idx{0};  // owned by producer
-    std::array<std::byte, N> buffer{};
+    uint8_t buffer[N];
 
     // Returns true on success, false if there is not enough room.
     bool Push(std::span<const std::byte> data) {
@@ -40,8 +40,8 @@ struct SPSCVarSize {
         if (used + total_size > N) return false;  // not enough capacity
 
         size_t offset = write & (N - 1);
-        CopyIn(buffer, offset, &payload_size, HEADER_SIZE);
-        CopyIn(buffer, offset + HEADER_SIZE, data.data(), payload_size);
+        CopyIn(buffer, N, offset, &payload_size, HEADER_SIZE);
+        CopyIn(buffer, N, offset + HEADER_SIZE, data.data(), payload_size);
 
         write_idx.store(write + total_size, std::memory_order_release);
         return true;
@@ -55,14 +55,14 @@ struct SPSCVarSize {
 
         size_t offset = read & (N - 1);
         size_t payload_size = 0;
-        CopyOut(buffer, offset, &payload_size, HEADER_SIZE);
+        CopyOut(buffer, N, offset, &payload_size, HEADER_SIZE);
 
         const size_t total_size = HEADER_SIZE + payload_size;
         if (read + total_size > write) return std::vector<std::byte>{};  // incomplete write
 
         std::vector<std::byte> payload(payload_size);
         if (payload_size > 0) {
-            CopyOut(buffer, offset + HEADER_SIZE, payload.data(), payload_size);
+            CopyOut(buffer, N, offset + HEADER_SIZE, payload.data(), payload_size);
         }
 
         read_idx.store(read + total_size, std::memory_order_release);

@@ -18,7 +18,8 @@ template <size_t N>
 struct SPMCMulticast {
     alignas(CACHE_LINE_SIZE) std::atomic_uint64_t read_idx{0};
     alignas(CACHE_LINE_SIZE) std::atomic_uint64_t write_idx{0};
-    std::array<std::byte, N> buffer{}; // buffer of bytes
+    uint8_t buffer[N]; // buffer of bytes
+
 };
 
 template <size_t N>
@@ -36,13 +37,13 @@ struct MCConsumer {
         
         size_t offset = local_ctr & (N - 1);
         size_t payload_size = 0;
-        CopyOut(queue.buffer, offset, &payload_size, HEADER_SIZE);
+        CopyOut(queue.buffer, N, offset, &payload_size, HEADER_SIZE);
 
         const size_t total_size = HEADER_SIZE + payload_size;
 
         std::vector<std::byte> payload(payload_size);
         if (payload_size > 0) {
-            CopyOut(queue.buffer, offset + HEADER_SIZE, payload.data(), payload_size);
+            CopyOut(queue.buffer, N, offset + HEADER_SIZE, payload.data(), payload_size);
         }
 
         local_ctr += total_size;
@@ -66,8 +67,8 @@ struct MCProducer {
 
         // copy data into ring buffer
         size_t offset = local_ctr & (N - 1);
-        CopyIn(queue.buffer, offset, &payload_size, HEADER_SIZE);
-        CopyIn(queue.buffer, offset + HEADER_SIZE, data.data(), payload_size);
+        CopyIn(queue.buffer, N, offset, &payload_size, HEADER_SIZE);
+        CopyIn(queue.buffer, N, offset + HEADER_SIZE, data.data(), payload_size);
 
         local_ctr += total_size;
 

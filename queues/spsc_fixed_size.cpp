@@ -23,7 +23,7 @@ template <typename T, size_t N>
 struct SPSCFixedSize {
     alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> read_idx{0};   // owned by consumer
     alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> write_idx{0};  // owned by producer
-    std::array<T, N> buffer{};
+    uint8_t buffer[N];
     // std::byte buffer[N]{};
 
     // Returns true on success, false if there is not enough room.
@@ -51,7 +51,7 @@ struct SPSCFixedSize {
         
         // Copy elements one by one, handling wrap-around
         const size_t offset = write & (N - 1);
-        CopyIn(buffer, offset, data.data(), data.size() * sizeof(T));
+        CopyIn(buffer, N, offset, data.data(), data.size() * sizeof(T));
 
         write_idx.fetch_add(data.size(), std::memory_order_release);
         return true;
@@ -80,7 +80,7 @@ struct SPSCFixedSize {
         // Copy elements one by one, handling wrap-around
         std::vector<T> payload(num_elements);
         const size_t offset = read & (N - 1);
-        CopyOut(buffer, offset, payload.data(), num_elements * sizeof(T));
+        CopyOut(buffer, N, offset, payload.data(), num_elements * sizeof(T));
 
         read_idx.fetch_add(num_elements, std::memory_order_release);
         return payload;
