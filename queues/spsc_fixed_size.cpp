@@ -16,6 +16,8 @@ The read/write counters grow monotonically; indices into the buffer are derived
 with modulo arithmetic so wrap-around is handled transparently.
 
 Uses fixed-size messages
+
+Capacity should be a power of 2
 */
 template <typename T, size_t N>
 struct SPSCFixedSize {
@@ -32,7 +34,7 @@ struct SPSCFixedSize {
         size_t used = write - read;
         if (used + 1 > N) return false;  // not enough capacity (element count)
 
-        size_t offset = write % N;
+        const size_t offset = write & (N - 1);
         buffer[offset] = data;
 
         write_idx.fetch_add(1, std::memory_order_release);
@@ -48,10 +50,8 @@ struct SPSCFixedSize {
         if (used + data.size() > N) return false;  // not enough capacity
         
         // Copy elements one by one, handling wrap-around
-        for (size_t i = 0; i < data.size(); ++i) {
-            size_t offset = (write + i) % N;
-            buffer[offset] = data[i];
-        }
+        const size_t offset = write & (N - 1);
+        CopyIn(buffer, offset, data.data(), data.size() * sizeof(T));
 
         write_idx.fetch_add(data.size(), std::memory_order_release);
         return true;
@@ -63,7 +63,7 @@ struct SPSCFixedSize {
         size_t write = write_idx.load(std::memory_order_acquire);
         if (read == write) return T{};
 
-        size_t offset = read % N;
+        const size_t offset = read & (N - 1);
         T payload = buffer[offset];
 
         read_idx.fetch_add(1, std::memory_order_release);
@@ -79,10 +79,8 @@ struct SPSCFixedSize {
 
         // Copy elements one by one, handling wrap-around
         std::vector<T> payload(num_elements);
-        for (size_t i = 0; i < num_elements; ++i) {
-            size_t offset = (read + i) % N;
-            payload[i] = buffer[offset];
-        }
+        const size_t offset = read & (N - 1);
+        CopyOut(buffer, offset, payload.data(), num_elements * sizeof(T));
 
         read_idx.fetch_add(num_elements, std::memory_order_release);
         return payload;

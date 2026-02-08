@@ -20,6 +20,7 @@ Each read (pop) moves the read_idx up by one
 Variable-length message size
 
 Template parameter N = size of queue
+N should be a power of 2
 */
 template <size_t N>
 struct SPSCVarSize {
@@ -39,7 +40,7 @@ struct SPSCVarSize {
         size_t used = write - read;
         if (used + total_size > N) return false;  // not enough capacity
 
-        size_t offset = write % N;
+        size_t offset = write & (N - 1);
         CopyIn(buffer, offset, &payload_size, HEADER_SIZE);
         CopyIn(buffer, offset + HEADER_SIZE, data.data(), payload_size);
 
@@ -53,7 +54,7 @@ struct SPSCVarSize {
         size_t write = write_idx.load(std::memory_order_acquire);
         if (read == write) return std::vector<std::byte>{};
 
-        size_t offset = read % N;
+        size_t offset = read & (N - 1);
         size_t payload_size = 0;
         CopyOut(buffer, offset, &payload_size, HEADER_SIZE);
 
