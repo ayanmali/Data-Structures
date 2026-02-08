@@ -11,7 +11,7 @@
 Single-producer multiple-consumer multicast queue.
 The producer writes messages sequentially and updates both read_idx and write_idx.
 Multiple consumers can independently read from their own position (local_ctr).
-Each message is: [size_t payload_size][payload bytes...].
+Variable-length message size; Each message is: [size_t payload_size][payload bytes...].
 */
 
 template <size_t N>

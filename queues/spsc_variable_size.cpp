@@ -33,10 +33,10 @@ struct SPSCVarSize {
         const size_t payload_size = data.size_bytes();
         const size_t total_size = HEADER_SIZE + payload_size;
 
-        size_t write = write_idx.load(std::memory_order_relaxed);
-        size_t read = read_idx.load(std::memory_order_acquire);
+        const size_t write = write_idx.load(std::memory_order_relaxed);
+        const size_t read = read_idx.load(std::memory_order_acquire);
 
-        size_t used = write - read;
+        const size_t used = write - read;
         if (used + total_size > N) return false;  // not enough capacity
 
         size_t offset = write & (N - 1);
@@ -49,11 +49,11 @@ struct SPSCVarSize {
 
     // Returns an empty vector if there is no message available.
     std::vector<std::byte> Pop() {
-        size_t read = read_idx.load(std::memory_order_relaxed);
-        size_t write = write_idx.load(std::memory_order_acquire);
+        const size_t read = read_idx.load(std::memory_order_relaxed);
+        const size_t write = write_idx.load(std::memory_order_acquire);
         if (read == write) return std::vector<std::byte>{};
 
-        size_t offset = read & (N - 1);
+        const size_t offset = read & (N - 1);
         size_t payload_size = 0;
         CopyOut(buffer, N, offset, &payload_size, HEADER_SIZE);
 

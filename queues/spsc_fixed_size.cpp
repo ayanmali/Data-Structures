@@ -23,19 +23,19 @@ template <typename T, size_t N>
 struct SPSCFixedSize {
     alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> read_idx{0};   // owned by consumer
     alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> write_idx{0};  // owned by producer
-    uint8_t buffer[N];
+    T buffer[N];
     // std::byte buffer[N]{};
 
     // Returns true on success, false if there is not enough room.
     bool PushOne(const T& data) {
-        size_t write = write_idx.load(std::memory_order_relaxed);
-        size_t read = read_idx.load(std::memory_order_acquire);
+        const size_t write = write_idx.load(std::memory_order_relaxed);
+        const size_t read = read_idx.load(std::memory_order_acquire);
 
-        size_t used = write - read;
+        const size_t used = write - read;
         if (used + 1 > N) return false;  // not enough capacity (element count)
 
         const size_t offset = write & (N - 1);
-        buffer[offset] = data;
+        std::memcpy(&buffer[offset], &data, sizeof(T));
 
         write_idx.fetch_add(1, std::memory_order_release);
         return true;
@@ -43,10 +43,10 @@ struct SPSCFixedSize {
 
     bool PushMany(std::span<const T> data) {
         //if (data.size() > N) return false;  // message does not fit at all
-        size_t write = write_idx.load(std::memory_order_relaxed);
-        size_t read = read_idx.load(std::memory_order_acquire);
+        const size_t write = write_idx.load(std::memory_order_relaxed);
+        const size_t read = read_idx.load(std::memory_order_acquire);
 
-        size_t used = write - read;
+        const size_t used = write - read;
         if (used + data.size() > N) return false;  // not enough capacity
         
         // Copy elements one by one, handling wrap-around
@@ -57,22 +57,23 @@ struct SPSCFixedSize {
         return true;
     }
 
-    // Returns an empty optional if there is no message available.
+    // Returns an empty object if there is no message available.
     T PopOne() {
-        size_t read = read_idx.load(std::memory_order_relaxed);
-        size_t write = write_idx.load(std::memory_order_acquire);
+        const size_t read = read_idx.load(std::memory_order_relaxed);
+        const size_t write = write_idx.load(std::memory_order_acquire);
         if (read == write) return T{};
 
         const size_t offset = read & (N - 1);
-        T payload = buffer[offset];
+        T payload;
+        std::memcpy(&payload, &buffer[offset], sizeof(T));
 
         read_idx.fetch_add(1, std::memory_order_release);
         return payload;
     }
 
     std::vector<T> PopMany(const size_t num_elements) {
-        size_t read = read_idx.load(std::memory_order_relaxed);
-        size_t write = write_idx.load(std::memory_order_acquire);
+        const size_t read = read_idx.load(std::memory_order_relaxed);
+        const size_t write = write_idx.load(std::memory_order_acquire);
         if (read == write) return std::vector<T>{};
 
         if (read + num_elements > write) return std::vector<T>{};  // incomplete write
