@@ -32,7 +32,6 @@ struct SPSCVarSize {
     bool Push(std::span<const std::byte> data) {
         const size_t payload_size = data.size_bytes();
         const size_t total_size = HEADER_SIZE + payload_size;
-        if (total_size > N) return false;  // message does not fit at all
 
         size_t write = write_idx.load(std::memory_order_relaxed);
         size_t read = read_idx.load(std::memory_order_acquire);
