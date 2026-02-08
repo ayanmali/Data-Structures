@@ -8,14 +8,14 @@
 #include "ring_buffer_utils.hpp"
 
 /*
-Single-producer multiple-consumer fast queue.
+Single-producer multiple-consumer multicast queue.
 The producer writes messages sequentially and updates both read_idx and write_idx.
 Multiple consumers can independently read from their own position (local_ctr).
 Each message is: [size_t payload_size][payload bytes...].
 */
 
 template <size_t N>
-struct SPMCMulticast {
+struct SPMCFastQueue {
     alignas(CACHE_LINE_SIZE) std::atomic_uint64_t read_idx{0};
     alignas(CACHE_LINE_SIZE) std::atomic_uint64_t write_idx{0};
     uint8_t buffer[N]; // buffer of bytes
@@ -27,7 +27,7 @@ struct MCConsumer {
     size_t local_ctr{0};
 
     // returns bytes read (empty if nothing to read)
-    std::vector<std::byte> Pop(const SPMCMulticast<N>& queue) {
+    std::vector<std::byte> Pop(const SPMCFastQueue<N>& queue) {
         uint64_t read = queue.read_idx.load(std::memory_order_acquire);
         
         // nothing to read
@@ -56,7 +56,7 @@ struct MCProducer {
     size_t local_ctr{0};
     
     // Returns true on success, false if there is not enough room.
-    bool Push(SPMCMulticast<N>& queue, std::span<const std::byte> data) {
+    bool Push(SPMCFastQueue<N>& queue, std::span<const std::byte> data) {
         const size_t payload_size = data.size_bytes();
         const size_t total_size = HEADER_SIZE + payload_size;
         
@@ -85,7 +85,7 @@ struct MCProducer {
 bool test_single_message() {
     std::cout << "Test 1: Single message push and pop... ";
     
-    SPMCMulticast<256> queue;
+    SPMCFastQueue<256> queue;
     MCProducer<256> producer;
     MCConsumer<256> consumer;
     
@@ -120,7 +120,7 @@ bool test_single_message() {
 bool test_multiple_messages() {
     std::cout << "Test 2: Multiple messages... ";
     
-    SPMCMulticast<256> queue;
+    SPMCFastQueue<256> queue;
     MCProducer<256> producer;
     MCConsumer<256> consumer;
     
@@ -166,7 +166,7 @@ bool test_multiple_messages() {
 bool test_empty_pop() {
     std::cout << "Test 3: Pop from empty queue... ";
     
-    SPMCMulticast<256> queue;
+    SPMCFastQueue<256> queue;
     MCConsumer<256> consumer;
     
     auto popped = consumer.Pop(queue);
@@ -182,7 +182,7 @@ bool test_empty_pop() {
 bool test_multiple_consumers() {
     std::cout << "Test 4: Multiple consumers reading same data... ";
     
-    SPMCMulticast<256> queue;
+    SPMCFastQueue<256> queue;
     MCProducer<256> producer;
     MCConsumer<256> consumer1;
     MCConsumer<256> consumer2;
@@ -219,7 +219,7 @@ bool test_multiple_consumers() {
 bool test_empty_message() {
     std::cout << "Test 5: Empty message... ";
     
-    SPMCMulticast<256> queue;
+    SPMCFastQueue<256> queue;
     MCProducer<256> producer;
     MCConsumer<256> consumer;
     
@@ -243,7 +243,7 @@ bool test_empty_message() {
 bool test_consumer_independence() {
     std::cout << "Test 6: Consumer independence... ";
     
-    SPMCMulticast<256> queue;
+    SPMCFastQueue<256> queue;
     MCProducer<256> producer;
     MCConsumer<256> consumer1;
     MCConsumer<256> consumer2;
@@ -289,7 +289,7 @@ bool test_consumer_independence() {
 bool test_multithreaded_consumers() {
     std::cout << "Test 7: Multithreaded consumers... ";
     
-    SPMCMulticast<1024> queue;
+    SPMCFastQueue<1024> queue;
     MCProducer<1024> producer;
     
     const int num_messages = 10;
