@@ -1,3 +1,5 @@
+#pragma once
+
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -14,51 +16,79 @@ Multiple consumers can independently read from their own position (local_ctr).
 Variable-length message size; Each message is: [size_t payload_size][payload bytes...].
 */
 
-template <size_t N>
+template <typename T, size_t N>
 struct SPMCFastQueue {
     alignas(CACHE_LINE_SIZE) std::atomic_uint64_t read_idx{0};
     alignas(CACHE_LINE_SIZE) std::atomic_uint64_t write_idx{0};
-    uint8_t buffer[N]; // buffer of bytes
+    T buffer[N]; // buffer
 
 };
 
-template <size_t N>
+template <typename T, size_t N>
 struct MCConsumer {
     size_t local_ctr{0};
 
     // returns bytes read (empty if nothing to read)
-    std::vector<std::byte> Pop(const SPMCFastQueue<N>& queue) {
+    bool Pop(const SPMCFastQueue<T, N>& queue, T* payload) {
         uint64_t read = queue.read_idx.load(std::memory_order_acquire);
         
         // nothing to read
         if (local_ctr == read) {
-            return std::vector<std::byte>{};
+            return false;
         }
         
         size_t offset = local_ctr & (N - 1);
-        size_t payload_size = 0;
-        CopyOut(queue.buffer, N, offset, &payload_size, HEADER_SIZE);
+        std::memcpy(payload, &queue.buffer[offset], sizeof(T));
 
-        const size_t total_size = HEADER_SIZE + payload_size;
+        return true;
+    }
 
-        std::vector<std::byte> payload(payload_size);
-        if (payload_size > 0) {
-            CopyOut(queue.buffer, N, offset + HEADER_SIZE, payload.data(), payload_size);
+    // returns bytes read (empty if nothing to read)
+    std::vector<T> PopMany(const SPMCFastQueue<T, N>& queue, size_t num_elements) {
+        uint64_t read = queue.read_idx.load(std::memory_order_acquire);
+        
+        // nothing to read
+        if (local_ctr == read) {
+            return std::vector<T>{};
         }
-
-        local_ctr += total_size;
+        
+        size_t offset = local_ctr & (N - 1);
+      
+        std::vector<T> payload(num_elements);
+        CopyOut(queue.buffer, N, offset, payload.data(), num_elements);
+        
+        local_ctr += num_elements;
         return payload;
     }
 };
 
-template <size_t N>
+template <typename T, size_t N>
 struct MCProducer {
     size_t local_ctr{0};
     
     // Returns true on success, false if there is not enough room.
-    bool Push(SPMCFastQueue<N>& queue, std::span<const std::byte> data) {
-        const size_t payload_size = data.size_bytes();
-        const size_t total_size = HEADER_SIZE + payload_size;
+    bool PushOne(SPMCFastQueue<T, N>& queue, T data) {
+        // Check if there's enough space
+        if (local_ctr + 1 > N) {
+            return false;
+        }
+
+        // copy data into ring buffer
+        size_t offset = local_ctr & (N - 1);
+        CopyIn(queue.buffer, N, offset, &data, 1);
+
+        local_ctr += 1;
+
+        // set the write counter first (data is written)
+        queue.write_idx.store(local_ctr, std::memory_order_release);
+        
+        // set the read counter (data is ready to be consumed)
+        queue.read_idx.store(local_ctr, std::memory_order_release);
+        return true;
+    }
+
+    bool PushMany(SPMCFastQueue<T, N>& queue, std::span<T> data) {
+        const size_t total_size = data.size();
         
         // Check if there's enough space
         if (local_ctr + total_size > N) {
@@ -67,8 +97,7 @@ struct MCProducer {
 
         // copy data into ring buffer
         size_t offset = local_ctr & (N - 1);
-        CopyIn(queue.buffer, N, offset, &payload_size, HEADER_SIZE);
-        CopyIn(queue.buffer, N, offset + HEADER_SIZE, data.data(), payload_size);
+        CopyIn(queue.buffer, N, offset, data.data(), total_size);
 
         local_ctr += total_size;
 
@@ -80,6 +109,8 @@ struct MCProducer {
         return true;
     }
 };
+
+// TODO: refactor Pop() calls in tests
 
 // Test helpers
 bool test_single_message() {

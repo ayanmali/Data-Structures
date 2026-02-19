@@ -58,17 +58,16 @@ struct SPSCFixedSize {
     }
 
     // Returns an empty object if there is no message available.
-    T PopOne() {
+    bool PopOne(T* payload) {
         const size_t read = read_idx.load(std::memory_order_relaxed);
         const size_t write = write_idx.load(std::memory_order_acquire);
-        if (read == write) return T{};
+        if (read == write) return false;
 
         const size_t offset = read & (N - 1);
-        T payload;
-        std::memcpy(&payload, &buffer[offset], sizeof(T));
+        std::memcpy(payload, &buffer[offset], sizeof(T));
 
         read_idx.fetch_add(1, std::memory_order_release);
-        return payload;
+        return true;
     }
 
     std::vector<T> PopMany(const size_t num_elements) {
@@ -87,6 +86,8 @@ struct SPSCFixedSize {
         return payload;
     }
 };
+
+// TODO: refactor Pop() calls
 
 // Helper function to compare two sequences of values
 template <typename T>
