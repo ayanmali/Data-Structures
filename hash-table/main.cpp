@@ -36,9 +36,9 @@ class HashTable {
 template<typename K, typename V>
 void HashTable<K, V>::print() {
     for (const std::pair<size_t, std::unique_ptr<std::pair<K, V>>>& entry : this->table) {
-        std::cout << "Bucket " << entry.first << ": " << (entry.second ? entry.second->first : K()) << " -> " << (entry.second ? entry.second->second : V()) << std::endl;
+        std::cout << "Bucket " << entry.first << ": " << (entry.second ? entry.second->first : K()) << " -> " << (entry.second ? entry.second->second : V()) << "\n";
     }
-    std::cout << std::endl;
+    std::cout << "\n";
 };
 
 template <typename K, typename V>
